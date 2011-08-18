@@ -63,7 +63,22 @@ module SSAlleyWare
         end
         true
       else
-        fail OpenSSL::OpenSSLError.new("unable to verify the server certificate of `#{@hostname}'")
+        hostname = respond_to?(:hostname) ? self.hostname : nil
+        fail OpenSSL::OpenSSLError.new("unable to verify the server certificate#{" of `#{hostname}'" if hostname}")
+        false
+      end
+    end
+
+    def ssl_handshake_completed
+      if respond_to?(:hostname) && hostname = self.hostname
+        unless OpenSSL::SSL.verify_certificate_identity(@last_seen_cert, hostname)
+          fail OpenSSL::OpenSSLError.new("the hostname `#{hostname}' does not match the server certificate")
+          false
+        else
+          true
+        end
+      else
+        warn "Skipping hostname verification because `#{self.class.name}#hostname' is not available."
         false
       end
     end

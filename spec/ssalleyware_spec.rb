@@ -61,9 +61,10 @@ end
 
 class Verifyer
   include SSAlleyWare::CertificateVerification
+  attr_accessor :hostname
 end
 
-describe "SSAlleyWare::CertificateVerification, when verifying certificates" do
+describe "SSAlleyWare::CertificateVerification" do
   def fixture_cert(name)
     File.expand_path("../fixtures/certificates/#{name}", __FILE__)
   end
@@ -93,9 +94,7 @@ describe "SSAlleyWare::CertificateVerification, when verifying certificates" do
   end
 
   it "does not fail if a root CA certificate is given, which the server *may* do" do
-    lambda {
-      @verifyer.ssl_verify_peer(@root_ca_cert).should == true
-    }.should.not.raise
+    @verifyer.ssl_verify_peer(@root_ca_cert).should == true
     @verifyer.ssl_verify_peer(@intermediate_ca_cert).should == true
     @verifyer.ssl_verify_peer(@server_cert).should == true
   end
@@ -105,5 +104,20 @@ describe "SSAlleyWare::CertificateVerification, when verifying certificates" do
     @verifyer.ssl_verify_peer(@intermediate_ca_cert).should == true
     @verifyer.ssl_verify_peer(@intermediate_ca_cert).should == true
     @verifyer.ssl_verify_peer(@server_cert).should == true
+  end
+
+  it "verifies the hostname of the last certificate" do
+    @verifyer.ssl_verify_peer(@intermediate_ca_cert)
+    @verifyer.ssl_verify_peer(@server_cert)
+    @verifyer.hostname = 'server.ssalleyware.local'
+    @verifyer.ssl_handshake_completed.should == true
+  end
+
+  it "fails hostname verification if the hostname does not match the certificate" do
+    @verifyer.ssl_verify_peer(@intermediate_ca_cert)
+    @verifyer.ssl_verify_peer(@server_cert)
+    @verifyer.hostname = 'server.somewhere-else.local'
+    @verifyer.expects(:fail).with { |error| error.class == OpenSSL::OpenSSLError }
+    @verifyer.ssl_handshake_completed.should == false
   end
 end
