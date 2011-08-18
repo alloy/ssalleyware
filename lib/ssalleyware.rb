@@ -50,17 +50,18 @@ module SSAlleyWare
       @ca_store
     end
 
+    # It's important that we try to not add a certificate to the store that's
+    # already in the store, because OpenSSL::X509::Store will raise an exception.
     def ssl_verify_peer(cert_string)
-      @last_seen_cert = OpenSSL::X509::Certificate.new(cert_string)
+      cert = OpenSSL::X509::Certificate.new(cert_string)
+      # Some servers send the same certificate multiple times. I'm not even joking... (gmail.com)
+      return true if cert == @last_seen_cert
+      @last_seen_cert = cert
+
       if ca_store.verify(@last_seen_cert)
-        begin
-          ca_store.add_cert(@last_seen_cert)
-        rescue OpenSSL::X509::StoreError => e
-          # This is so lame, but there appears to be no way to check this in a simple way.
-          #
-          # TODO It _might_ be possible to do this with the C api.
-          raise e unless e.message == 'cert already in hash table'
-        end
+        # A server may send the root certificate, which we already have and thus
+        # should not be added to the store again.
+        ca_store.add_cert(@last_seen_cert) unless @last_seen_cert.root?
         true
       else
         hostname = respond_to?(:hostname) ? self.hostname : nil
@@ -81,6 +82,24 @@ module SSAlleyWare
         warn "Skipping hostname verification because `#{self.class.name}#hostname' is not available."
         false
       end
+    end
+  end
+end
+
+module OpenSSL
+  module X509
+    class Certificate
+      def ==(other)
+        other.respond_to?(:to_pem) && to_pem == other.to_pem
+      end
+
+      # A serial *must* be unique for each certificate. Self-signed certificates,
+      # and thus root CA certificates, have the same `issuer' as `subject'.
+      def top_level?
+        serial == serial && issuer.to_s == subject.to_s
+      end
+      alias_method :root?, :top_level?
+      alias_method :self_signed?, :top_level?
     end
   end
 end
