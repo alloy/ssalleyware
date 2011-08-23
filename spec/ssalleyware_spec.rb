@@ -93,6 +93,10 @@ describe "SSAlleyWare::CertificateVerification" do
     @verifyer.ssl_verify_peer(@server_cert).should == false
   end
 
+  it "returns false if a certificate data is not a valid certificate" do
+    @verifyer.ssl_verify_peer("BAD").should == false
+  end
+
   it "does not fail if a root CA certificate is given, which the server *may* do" do
     @verifyer.ssl_verify_peer(@root_ca_cert).should == true
     @verifyer.ssl_verify_peer(@intermediate_ca_cert).should == true
